@@ -38,6 +38,9 @@ fun Project.library(name: String): String =
 fun Project.libraryVersion(name: String): String =
     libraries[name]!!["version"]!!
 
+fun Project.libraryReason(name: String): String? =
+    libraries[name]!!["because"]
+
 
 fun Project.testLibrary(name: String): Any =
     testLibraries[name]!!
