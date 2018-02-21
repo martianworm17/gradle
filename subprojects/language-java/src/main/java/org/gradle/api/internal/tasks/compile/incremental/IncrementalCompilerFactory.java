@@ -25,6 +25,7 @@ import org.gradle.api.internal.tasks.compile.incremental.analyzer.CachingClassDe
 import org.gradle.api.internal.tasks.compile.incremental.analyzer.ClassAnalysisCache;
 import org.gradle.api.internal.tasks.compile.incremental.analyzer.ClassDependenciesAnalyzer;
 import org.gradle.api.internal.tasks.compile.incremental.analyzer.DefaultClassDependenciesAnalyzer;
+import org.gradle.api.internal.tasks.compile.incremental.annotation.AnnotationProcessorPathStore;
 import org.gradle.api.internal.tasks.compile.incremental.cache.CompileCaches;
 import org.gradle.api.internal.tasks.compile.incremental.cache.GeneralCompileCaches;
 import org.gradle.api.internal.tasks.compile.incremental.deps.LocalClassSetAnalysisStore;
@@ -75,6 +76,7 @@ public class IncrementalCompilerFactory {
     private CompileCaches createCompileCaches(String path) {
         final LocalClassSetAnalysisStore localClassSetAnalysisStore = generalCompileCaches.createLocalClassSetAnalysisStore(path);
         final LocalJarClasspathSnapshotStore localJarClasspathSnapshotStore = generalCompileCaches.createLocalJarClasspathSnapshotStore(path);
+        final AnnotationProcessorPathStore annotationProcessorPathStore = generalCompileCaches.createAnnotationProcessorPathStore(path);
         return new CompileCaches() {
             public ClassAnalysisCache getClassAnalysisCache() {
                 return generalCompileCaches.getClassAnalysisCache();
@@ -90,6 +92,11 @@ public class IncrementalCompilerFactory {
 
             public LocalClassSetAnalysisStore getLocalClassSetAnalysisStore() {
                 return localClassSetAnalysisStore;
+            }
+
+            @Override
+            public AnnotationProcessorPathStore getAnnotationProcessorPathStore() {
+                return annotationProcessorPathStore;
             }
         };
     }

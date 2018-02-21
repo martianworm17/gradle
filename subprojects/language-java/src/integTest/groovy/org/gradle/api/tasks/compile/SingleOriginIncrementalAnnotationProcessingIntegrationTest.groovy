@@ -20,7 +20,6 @@ import org.gradle.api.internal.tasks.compile.processing.IncrementalAnnotationPro
 import org.gradle.language.fixtures.HelperProcessorFixture
 import org.gradle.language.fixtures.NonIncrementalProcessorFixture
 import org.gradle.language.fixtures.ServiceRegistryProcessorFixture
-import org.gradle.util.ToBeImplemented
 
 class SingleOriginIncrementalAnnotationProcessingIntegrationTest extends AbstractIncrementalAnnotationProcessingIntegrationTest {
     private HelperProcessorFixture helperProcessor
@@ -95,7 +94,6 @@ class SingleOriginIncrementalAnnotationProcessingIntegrationTest extends Abstrac
         !file("build/classes/java/main/AHelper.java").exists()
     }
 
-    @ToBeImplemented
     def "generated files are deleted when processor is removed"() {
         given:
         def a = java "@Helper class A {}"
@@ -111,11 +109,9 @@ class SingleOriginIncrementalAnnotationProcessingIntegrationTest extends Abstrac
         run "compileJava"
 
         then:
-        // current, undesired behavior
-        file("build/classes/java/main/AHelper.java").exists()
+        !file("build/classes/java/main/AHelper.java").exists()
     }
 
-    @ToBeImplemented
     def "all files are recompiled when processor changes"() {
         given:
         def a = java "@Helper class A {}"
@@ -127,8 +123,7 @@ class SingleOriginIncrementalAnnotationProcessingIntegrationTest extends Abstrac
         run "compileJava"
 
         then:
-        // current, undesired behavior
-        outputs.recompiledClasses()
+        outputs.recompiledClasses("A", "AHelper")
     }
 
     def "processors must provide an originating element for each source element"() {

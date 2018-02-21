@@ -20,6 +20,7 @@ import org.gradle.api.internal.changedetection.state.InMemoryCacheDecoratorFacto
 import org.gradle.api.internal.tasks.compile.incremental.analyzer.ClassAnalysisCache;
 import org.gradle.api.internal.tasks.compile.incremental.analyzer.ClassAnalysisSerializer;
 import org.gradle.api.internal.tasks.compile.incremental.analyzer.DefaultClassAnalysisCache;
+import org.gradle.api.internal.tasks.compile.incremental.annotation.AnnotationProcessorPathStore;
 import org.gradle.api.internal.tasks.compile.incremental.deps.ClassAnalysis;
 import org.gradle.api.internal.tasks.compile.incremental.deps.ClassSetAnalysisData;
 import org.gradle.api.internal.tasks.compile.incremental.deps.LocalClassSetAnalysisStore;
@@ -37,9 +38,13 @@ import org.gradle.cache.PersistentCache;
 import org.gradle.cache.PersistentIndexedCache;
 import org.gradle.cache.PersistentIndexedCacheParameters;
 import org.gradle.internal.hash.HashCode;
+import org.gradle.internal.serialize.BaseSerializerFactory;
 import org.gradle.internal.serialize.HashCodeSerializer;
+import org.gradle.internal.serialize.ListSerializer;
 
 import java.io.Closeable;
+import java.io.File;
+import java.util.List;
 
 import static org.gradle.cache.internal.filelock.LockOptionsBuilder.mode;
 
@@ -49,6 +54,7 @@ public class DefaultGeneralCompileCaches implements GeneralCompileCaches, Closea
     private final PersistentCache cache;
     private final PersistentIndexedCache<String, JarClasspathSnapshotData> taskJarCache;
     private final PersistentIndexedCache<String, ClassSetAnalysisData> taskCompileCache;
+    private final PersistentIndexedCache<String, List<File>> taskProcessorPathCache;
 
     public DefaultGeneralCompileCaches(CacheRepository cacheRepository, Gradle gradle, InMemoryCacheDecoratorFactory inMemoryCacheDecoratorFactory) {
         cache = cacheRepository
@@ -71,6 +77,9 @@ public class DefaultGeneralCompileCaches implements GeneralCompileCaches, Closea
         PersistentIndexedCacheParameters<String, ClassSetAnalysisData> taskCompileCacheParameters = new PersistentIndexedCacheParameters<String, ClassSetAnalysisData>("taskHistory", String.class, new ClassSetAnalysisData.Serializer())
                 .cacheDecorator(inMemoryCacheDecoratorFactory.decorator(2000, false));
         taskCompileCache = cache.createCache(taskCompileCacheParameters);
+        PersistentIndexedCacheParameters<String, List<File>> taskProcessorPathCacheParameters = new PersistentIndexedCacheParameters<String, List<File>>("processorPath", String.class, new ListSerializer<File>(BaseSerializerFactory.FILE_SERIALIZER))
+                .cacheDecorator(inMemoryCacheDecoratorFactory.decorator(2000, false));
+        taskProcessorPathCache = cache.createCache(taskProcessorPathCacheParameters);
     }
 
     @Override
@@ -96,5 +105,10 @@ public class DefaultGeneralCompileCaches implements GeneralCompileCaches, Closea
     @Override
     public LocalClassSetAnalysisStore createLocalClassSetAnalysisStore(String taskPath) {
         return new LocalClassSetAnalysisStore(taskPath, taskCompileCache);
+    }
+
+    @Override
+    public AnnotationProcessorPathStore createAnnotationProcessorPathStore(String taskpath) {
+        return new AnnotationProcessorPathStore(taskpath, taskProcessorPathCache);
     }
 }

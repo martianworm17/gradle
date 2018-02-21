@@ -16,16 +16,19 @@
 
 package org.gradle.api.internal.tasks.compile.incremental;
 
+import com.google.common.collect.Iterables;
 import org.gradle.api.Action;
 import org.gradle.api.internal.changedetection.rules.FileChange;
 import org.gradle.api.internal.file.FileOperations;
+import org.gradle.api.internal.tasks.compile.incremental.jar.CurrentCompilation;
 import org.gradle.api.internal.tasks.compile.incremental.jar.JarChangeProcessor;
 import org.gradle.api.internal.tasks.compile.incremental.jar.JarClasspathSnapshot;
 import org.gradle.api.internal.tasks.compile.incremental.jar.JarSnapshot;
 import org.gradle.api.internal.tasks.compile.incremental.jar.PreviousCompilation;
 import org.gradle.api.internal.tasks.compile.incremental.recomp.RecompilationSpec;
-import org.gradle.api.tasks.incremental.IncrementalTaskInputs;
 import org.gradle.api.tasks.incremental.InputFileDetails;
+import org.gradle.internal.file.DefaultFileHierarchySet;
+import org.gradle.internal.file.FileHierarchySet;
 import org.gradle.internal.file.FileType;
 import org.gradle.internal.util.Alignment;
 
@@ -46,22 +49,21 @@ public class RecompilationSpecProvider {
         this.fileOperations = fileOperations;
     }
 
-    public RecompilationSpec provideRecompilationSpec(IncrementalTaskInputs inputs, PreviousCompilation previousCompilation, JarClasspathSnapshot jarClasspathSnapshot) {
-        //creating an action that will be executed against all changes
+    public RecompilationSpec provideRecompilationSpec(CurrentCompilation current, PreviousCompilation previous) {
         RecompilationSpec spec = new RecompilationSpec();
-        JarChangeProcessor jarChangeProcessor = new JarChangeProcessor(fileOperations, jarClasspathSnapshot, previousCompilation);
-        processJarChanges(previousCompilation.getJarSnapshots(), jarClasspathSnapshot, jarChangeProcessor, spec);
-        JavaChangeProcessor javaChangeProcessor = new JavaChangeProcessor(previousCompilation, sourceToNameConverter);
-        ClassChangeProcessor classChangeProcessor = new ClassChangeProcessor(previousCompilation);
-        InputChangeAction action = new InputChangeAction(spec, javaChangeProcessor, classChangeProcessor);
+        JarChangeProcessor jarChangeProcessor = new JarChangeProcessor(fileOperations, current.getClasspathSnapshot(), previous);
+        processJarChanges(previous.getJarSnapshots(), current.getClasspathSnapshot(), jarChangeProcessor, spec);
+        JavaChangeProcessor javaChangeProcessor = new JavaChangeProcessor(previous, sourceToNameConverter);
+        ClassChangeProcessor classChangeProcessor = new ClassChangeProcessor(previous);
+        AnnotationProcessorChangeProcessor annotationProcessorChangeProcessor = new AnnotationProcessorChangeProcessor(current, previous);
+        InputChangeAction action = new InputChangeAction(spec, javaChangeProcessor, classChangeProcessor, annotationProcessorChangeProcessor);
 
-        //go!
-        inputs.outOfDate(action);
+        current.getInputs().outOfDate(action);
         if (action.spec.getFullRebuildCause() != null) {
             //short circuit in case we already know that that full rebuild is needed
             return action.spec;
         }
-        inputs.removed(action);
+        current.getInputs().removed(action);
         return action.spec;
     }
 
@@ -98,11 +100,13 @@ public class RecompilationSpecProvider {
         private final RecompilationSpec spec;
         private final JavaChangeProcessor javaChangeProcessor;
         private final ClassChangeProcessor classChangeProcessor;
+        private final AnnotationProcessorChangeProcessor annotationProcessorChangeProcessor;
 
-        public InputChangeAction(RecompilationSpec spec, JavaChangeProcessor javaChangeProcessor, ClassChangeProcessor classChangeProcessor) {
+        public InputChangeAction(RecompilationSpec spec, JavaChangeProcessor javaChangeProcessor, ClassChangeProcessor classChangeProcessor, AnnotationProcessorChangeProcessor annotationProcessorChangeProcessor) {
             this.spec = spec;
             this.javaChangeProcessor = javaChangeProcessor;
             this.classChangeProcessor = classChangeProcessor;
+            this.annotationProcessorChangeProcessor = annotationProcessorChangeProcessor;
         }
 
         @Override
@@ -110,10 +114,27 @@ public class RecompilationSpecProvider {
             if (spec.getFullRebuildCause() != null) {
                 return;
             }
+
+            annotationProcessorChangeProcessor.processChange(input, spec);
+
             if (hasExtension(input.getFile(), ".java")) {
                 javaChangeProcessor.processChange(input, spec);
             } else if (hasExtension(input.getFile(), ".class")) {
                 classChangeProcessor.processChange(input, spec);
+            }
+        }
+    }
+
+    private static class AnnotationProcessorChangeProcessor {
+        private final FileHierarchySet jointProcessorPath;
+
+        AnnotationProcessorChangeProcessor(CurrentCompilation current, PreviousCompilation previous) {
+            this.jointProcessorPath = DefaultFileHierarchySet.of(Iterables.concat(current.getAnnotationProcessorPath(), previous.getAnnotationProcessorPath()));
+        }
+
+        public void processChange(InputFileDetails input, RecompilationSpec spec) {
+            if (jointProcessorPath.contains(input.getFile())) {
+                spec.setFullRebuildCause("Annotation processor path changed.", input.getFile());
             }
         }
     }
